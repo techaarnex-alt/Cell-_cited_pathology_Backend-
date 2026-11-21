@@ -1,0 +1,44 @@
+{
+  "name": "cell-cited-pathology-backend",
+  "version": "1.0.0",
+  "description": "Production-ready backend for Cell Cited Pathology Lab (CCPL)",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "swagger": "node scripts/generateSwagger.js",
+    "seed": "node -e \"require('./src/config/db').connectDB().then(() => require('./src/utils/seeder').seedInitialData()).then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });\"",
+    "test": "node tests/runner.js"
+  },
+  "keywords": [
+    "pathology",
+    "laboratory",
+    "cell-cited",
+    "express",
+    "mongodb",
+    "mongoose",
+    "swagger"
+  ],
+  "author": "Cell Cited Pathology Lab",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "compression": "^1.8.2",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
+    "joi": "^18.3.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.12.2",
+    "morgan": "^1.12.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.2"
+  }
+}
