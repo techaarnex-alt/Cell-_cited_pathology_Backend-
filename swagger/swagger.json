@@ -1,0 +1,1761 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Cell Cited Pathology Lab (CCPL) API",
+    "version": "1.0.0",
+    "description": "Production-ready REST API for Cell Cited Pathology Lab (CCPL) Barabanki. Features role-based access control, tenant isolation, clinical immutability, frozen referral snapshots, and audit logging.",
+    "contact": {
+      "name": "Cell Cited Pathology Lab",
+      "email": "ccpath11@gmail.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your JWT token to authenticate"
+      }
+    },
+    "schemas": {
+      "StandardSuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Operation successful"
+          },
+          "data": {
+            "type": "object"
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "example": "req-c7a6e124-7e89-4bc6-a94f"
+              }
+            }
+          }
+        }
+      },
+      "StandardErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "Validation failed"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "VALIDATION_ERROR"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "example": "req-c7a6e124-7e89-4bc6-a94f"
+              }
+            }
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "example": "CCPL@2026"
+          }
+        }
+      },
+      "ForgetPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "admin@cellcited.com"
+          },
+          "username": {
+            "type": "string",
+            "example": "admin"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "otp",
+          "newPassword"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "admin@cellcited.com"
+          },
+          "username": {
+            "type": "string",
+            "example": "admin"
+          },
+          "otp": {
+            "type": "string",
+            "example": "123456"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 6,
+            "example": "NewSecret@2026"
+          }
+        }
+      },
+      "PatientRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "age",
+          "gender"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Mr."
+          },
+          "name": {
+            "type": "string",
+            "example": "Jigyasa"
+          },
+          "age": {
+            "type": "number",
+            "example": 23
+          },
+          "ageUnit": {
+            "type": "string",
+            "enum": [
+              "Years",
+              "Months",
+              "Days"
+            ],
+            "example": "Years"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "Male",
+              "Female",
+              "Other"
+            ],
+            "example": "Male"
+          },
+          "mobile": {
+            "type": "string",
+            "example": "9554448906"
+          },
+          "address": {
+            "type": "string",
+            "example": "Shop No. 17, City Trade Centre, Barabanki"
+          },
+          "doctorId": {
+            "type": "string",
+            "example": "673d32847a9ef02bc4501a1e"
+          },
+          "testGroupIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "cbc",
+              "diabetes"
+            ]
+          },
+          "testIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": []
+          }
+        }
+      },
+      "DoctorRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Dr. P.S. Patel"
+          },
+          "specialty": {
+            "type": "string",
+            "example": "General Physician"
+          },
+          "mobile": {
+            "type": "string",
+            "example": "9876543210"
+          },
+          "address": {
+            "type": "string",
+            "example": "Civil Lines, Barabanki"
+          },
+          "referralPercentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "example": 60
+          }
+        }
+      },
+      "TestRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "referenceRange"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "HB"
+          },
+          "name": {
+            "type": "string",
+            "example": "Haemoglobin"
+          },
+          "category": {
+            "type": "string",
+            "example": "Haematology"
+          },
+          "unit": {
+            "type": "string",
+            "example": "g/dL"
+          },
+          "referenceRange": {
+            "type": "string",
+            "example": "12.00–15.00"
+          },
+          "rate": {
+            "type": "number",
+            "example": 120
+          },
+          "alertable": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "TestGroupRequest": {
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "CBC"
+          },
+          "name": {
+            "type": "string",
+            "example": "Complete Blood Count (CBC)"
+          },
+          "description": {
+            "type": "string",
+            "example": "Core blood count with differential and platelets"
+          },
+          "category": {
+            "type": "string",
+            "example": "Haematology"
+          },
+          "testNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Haemoglobin",
+              "Packed Cell Volume (PCV)",
+              "RBC Count"
+            ]
+          }
+        }
+      },
+      "ReportCreateRequest": {
+        "type": "object",
+        "required": [
+          "patientId"
+        ],
+        "properties": {
+          "patientId": {
+            "type": "string",
+            "example": "673d32847a9ef02bc4501a1e"
+          },
+          "doctorId": {
+            "type": "string",
+            "example": "673d32847a9ef02bc4501a1f"
+          },
+          "testGroupIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "cbc"
+            ]
+          },
+          "testIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Glucose Fasting"
+            ]
+          },
+          "feeOverride": {
+            "type": "number",
+            "nullable": true,
+            "example": 500
+          }
+        }
+      },
+      "ResultsUpdateRequest": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "testName": {
+                  "type": "string",
+                  "example": "Haemoglobin"
+                },
+                "value": {
+                  "type": "string",
+                  "example": "13.5"
+                },
+                "unit": {
+                  "type": "string",
+                  "example": "g/dL"
+                },
+                "referenceRange": {
+                  "type": "string",
+                  "example": "12.00–15.00"
+                },
+                "remark": {
+                  "type": "string",
+                  "example": "Normal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "FinalizeReportRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "example": 1
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "testName": {
+                  "type": "string",
+                  "example": "Haemoglobin"
+                },
+                "value": {
+                  "type": "string",
+                  "example": "13.5"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReopenReportRequest": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "Pathologist request: Repeat blood count sample required to verify low platelet count observation."
+          }
+        }
+      },
+      "PaymentRequest": {
+        "type": "object",
+        "required": [
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "example": 350
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "Cash",
+              "UPI",
+              "Card",
+              "Net Banking",
+              "Other"
+            ],
+            "example": "Cash"
+          },
+          "reference": {
+            "type": "string",
+            "example": "UPI-REF-9812479"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Advance received at sample collection"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/test-groups": {
+      "get": {
+        "summary": "List test groups and panels",
+        "description": "Retrieve all ordered investigation panels (CBC, LFT, Lipid Profile, etc.).",
+        "tags": [
+          "Test Groups"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test groups retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create test group / panel",
+        "tags": [
+          "Test Groups"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestGroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Test group created successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/tests": {
+      "get": {
+        "summary": "List catalogue tests",
+        "description": "Retrieve all available laboratory tests with categories, biological reference ranges, units, and rates.",
+        "tags": [
+          "Tests"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tests retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add test to catalogue",
+        "description": "Create a new investigation in the test catalogue.",
+        "tags": [
+          "Tests"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Test created successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/tests/{id}": {
+      "get": {
+        "summary": "Get test details",
+        "tags": [
+          "Tests"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test details retrieved"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update test in catalogue",
+        "description": "Update name, unit, reference range, or rate of a test. Existing historical reports remain unchanged.",
+        "tags": [
+          "Tests"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "referenceRange": {
+                    "type": "string"
+                  },
+                  "rate": {
+                    "type": "number"
+                  },
+                  "alertable": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test updated successfully"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete/retire test",
+        "description": "Retire a test from the active catalogue without breaking historical report links.",
+        "tags": [
+          "Tests"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test retired successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "summary": "List reports",
+        "description": "Retrieve investigation reports filtered by status, patient, date, or report number.",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Draft",
+                "Final"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reports retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Draft report",
+        "description": "Creates a Draft report for a registered patient, expanding panels and creating test snapshots.",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft report created successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{id}": {
+      "get": {
+        "summary": "Read report",
+        "description": "Get full report details with snapshot patient demographics, doctor referral rate, and test investigations.",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report details retrieved"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{id}/results": {
+      "patch": {
+        "summary": "Save Draft results",
+        "description": "Save observed test values, units, reference ranges, and remarks. Rejects if report is Final.",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultsUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Results saved successfully"
+          },
+          "409": {
+            "description": "Report is already finalised and immutable"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{id}/finalize": {
+      "post": {
+        "summary": "Finalize report",
+        "description": "Finalize the report. Requires every test investigation to have an observed value. Pathologist or admin only.",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report finalised successfully"
+          },
+          "400": {
+            "description": "Incomplete report (missing observed values)"
+          },
+          "403": {
+            "description": "Only Pathologist or Administrator can finalize"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{id}/reopen": {
+      "post": {
+        "summary": "Reopen finalized report for corrections",
+        "description": "Controlled correction path for finalized reports. Requires authorized role and non-empty clinical justification.",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReopenReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report reopened successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{id}/documents": {
+      "post": {
+        "summary": "Request PDF render/document",
+        "description": "Generates a stable PDF document metadata entry (with or without letterhead).",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "withLetterhead": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Document generated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/patients": {
+      "get": {
+        "summary": "List and search patients",
+        "description": "Retrieve registered patients with pagination and search by name, patientNumber, or mobile.",
+        "tags": [
+          "Patients"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search by name, mobile, or patient ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Patients retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register patient",
+        "description": "Register demographic details. Optionally creates a Draft report atomically when tests/groups are selected.",
+        "tags": [
+          "Patients"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatientRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Patient created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patients/{id}": {
+      "get": {
+        "summary": "Get patient by ID",
+        "description": "Retrieve detailed patient demographics along with previous laboratory investigation reports.",
+        "tags": [
+          "Patients"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient details retrieved"
+          },
+          "404": {
+            "description": "Patient not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update patient details",
+        "description": "Update demographic details of an existing registered patient.",
+        "tags": [
+          "Patients"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "age": {
+                    "type": "number"
+                  },
+                  "gender": {
+                    "type": "string"
+                  },
+                  "mobile": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "doctorId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Patient updated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/laboratory": {
+      "get": {
+        "summary": "Get laboratory profile",
+        "description": "Retrieve establishment certificate, address, contact numbers, signatory, and branding details.",
+        "tags": [
+          "Laboratory Profile"
+        ],
+        "responses": {
+          "200": {
+            "description": "Laboratory profile retrieved successfully"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update laboratory profile",
+        "description": "Update establishment address, phone numbers, email, or signatory information (Administrator only).",
+        "tags": [
+          "Laboratory Profile"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "phones": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "medicalCertificate": {
+                    "type": "string"
+                  },
+                  "authorisedSignatory": {
+                    "type": "string"
+                  },
+                  "registrationDetails": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Laboratory profile updated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "System health check",
+        "description": "Health and uptime status of the backend API service and MongoDB Atlas connection.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "System operational",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{id}/download": {
+      "get": {
+        "summary": "Download generated report or invoice document",
+        "description": "Authorizes download and logs an immutable audit event for the file retrieval.",
+        "tags": [
+          "Documents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document download authorized"
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors": {
+      "get": {
+        "summary": "List referring doctors",
+        "description": "Retrieve all referring doctors and clinics with referral percentages.",
+        "tags": [
+          "Doctors"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doctors retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add referring doctor",
+        "description": "Save a new referring doctor or organisation with agreed referral percentage.",
+        "tags": [
+          "Doctors"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoctorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Doctor created successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/{id}": {
+      "patch": {
+        "summary": "Update referring doctor",
+        "description": "Edit doctor name, specialty, mobile, clinic address, or referral percentage. Note that historical report referral earnings remain unchanged.",
+        "tags": [
+          "Doctors"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "specialty": {
+                    "type": "string"
+                  },
+                  "mobile": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "referralPercentage": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Doctor updated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/{id}/earnings": {
+      "get": {
+        "summary": "Get doctor referral earnings",
+        "description": "Calculate referral earnings based strictly on report doctor percentage snapshots.",
+        "tags": [
+          "Doctors"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doctor earnings calculated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/stats": {
+      "get": {
+        "summary": "Dashboard operational statistics",
+        "description": "Real-time aggregated statistics for patient counts, draft reports, ready reports, billing metrics, and recent activity.",
+        "tags": [
+          "Dashboard"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/invoices": {
+      "get": {
+        "summary": "List invoices",
+        "description": "Retrieve all patient billing invoices and outstanding balances.",
+        "tags": [
+          "Invoices & Billing"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Pending",
+                "Partial",
+                "Paid"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create invoice",
+        "tags": [
+          "Invoices & Billing"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reportId"
+                ],
+                "properties": {
+                  "reportId": {
+                    "type": "string"
+                  },
+                  "total": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invoice created successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/invoices/{id}/payments": {
+      "post": {
+        "summary": "Record invoice payment",
+        "description": "Append-only payment ledger entry. Server computes balance and rejects any overpayment.",
+        "tags": [
+          "Invoices & Billing"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Payment recorded successfully"
+          },
+          "400": {
+            "description": "Overpayment or invalid payment amount"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/summary": {
+      "get": {
+        "summary": "Billing summary dashboard",
+        "description": "Aggregated total billed, collected, and outstanding balances.",
+        "tags": [
+          "Invoices & Billing"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary retrieved successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "User login",
+        "description": "Authenticate laboratory staff and receive JWT access token.",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/forget-password": {
+      "post": {
+        "summary": "Request password reset OTP",
+        "description": "Generates a 6-digit OTP, stores its expiration (10 mins), and sends an email via EmailJS.",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP generated and sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-reset": {
+      "post": {
+        "summary": "Reset password with OTP",
+        "description": "Validates the 6-digit OTP and resets the user password.",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired OTP"
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "summary": "Get current authenticated user profile",
+        "description": "Retrieve current user identity, role, and laboratory context.",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "tags": []
+}
