@@ -14,6 +14,11 @@ const getMe = catchAsync(async (req, res) => {
   return sendSuccess(res, 200, 'User profile retrieved successfully', result);
 });
 
+const updateProfile = catchAsync(async (req, res) => {
+  const result = await authService.updateProfile(req.user._id, req.body, req);
+  return sendSuccess(res, 200, 'User profile updated successfully', result);
+});
+
 const forgetPassword = catchAsync(async (req, res) => {
   const { email, username } = req.body;
   const result = await authService.forgetPassword({ email, username }, req);
@@ -44,6 +49,7 @@ const resetPassword = catchAsync(async (req, res) => {
 module.exports = {
   login,
   getMe,
+  updateProfile,
   forgetPassword,
   resetPassword,
 };

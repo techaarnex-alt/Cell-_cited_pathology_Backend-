@@ -53,8 +53,21 @@ const resetPasswordSchema = Joi.object({
     'object.missing': 'Please provide old password or OTP to reset password',
   });
 
+const updateProfileSchema = Joi.object({
+  name: Joi.string().trim().max(100).allow(''),
+  fullName: Joi.string().trim().max(100).allow(''),
+  username: Joi.string().trim().min(3).max(50),
+  email: Joi.string().trim().email().allow(''),
+  phone: Joi.alternatives().try(Joi.string().allow(''), Joi.array().items(Joi.string())),
+  phones: Joi.alternatives().try(Joi.string().allow(''), Joi.array().items(Joi.string())),
+  phoneNumber: Joi.alternatives().try(Joi.string().allow(''), Joi.array().items(Joi.string())),
+  address: Joi.string().trim().allow(''),
+  authorisedSignatory: Joi.string().trim().allow(''),
+}).unknown(true);
+
 module.exports = {
   loginSchema,
   forgetPasswordSchema,
   resetPasswordSchema,
+  updateProfileSchema,
 };

@@ -273,9 +273,98 @@ const resetPasswordLoggedIn = async ({ authHeader, oldPassword, newPassword, con
   };
 };
 
+const updateProfile = async (userId, updateData, req = null) => {
+  const user = await User.findById(userId);
+  if (!user || !user.isActive) {
+    throw ApiError.notFound('User not found or account is deactivated');
+  }
+
+  // 1. Update user fields
+  const newName = updateData.name !== undefined ? updateData.name : updateData.fullName;
+  if (newName !== undefined && String(newName).trim()) {
+    user.name = String(newName).trim();
+  }
+
+  if (updateData.username !== undefined && String(updateData.username).trim()) {
+    const cleanUsername = String(updateData.username).toLowerCase().trim();
+    if (cleanUsername !== user.username) {
+      const existingUser = await User.findOne({
+        username: cleanUsername,
+        _id: { $ne: user._id },
+      });
+      if (existingUser) {
+        throw ApiError.badRequest('Username is already taken by another account');
+      }
+      user.username = cleanUsername;
+    }
+  }
+
+  if (updateData.email !== undefined && String(updateData.email).trim()) {
+    user.email = String(updateData.email).toLowerCase().trim();
+  }
+
+  await user.save();
+
+  // 2. Update laboratory fields if user is linked to a laboratory
+  let laboratory = null;
+  if (user.laboratoryId) {
+    laboratory = await Laboratory.findById(user.laboratoryId);
+    if (laboratory) {
+      if (updateData.address !== undefined) {
+        laboratory.address = String(updateData.address).trim();
+      }
+      if (updateData.authorisedSignatory !== undefined) {
+        laboratory.authorisedSignatory = String(updateData.authorisedSignatory).trim();
+      }
+
+      const rawPhones =
+        updateData.phones !== undefined
+          ? updateData.phones
+          : (updateData.phoneNumber !== undefined ? updateData.phoneNumber : updateData.phone);
+
+      if (rawPhones !== undefined) {
+        if (Array.isArray(rawPhones)) {
+          laboratory.phones = rawPhones.map((p) => String(p).trim()).filter(Boolean);
+        } else if (typeof rawPhones === 'string') {
+          laboratory.phones = rawPhones
+            .split(/[,;\n]+/)
+            .map((p) => p.trim())
+            .filter(Boolean);
+        }
+      }
+
+      if (updateData.email !== undefined && String(updateData.email).trim()) {
+        laboratory.email = String(updateData.email).toLowerCase().trim();
+      }
+
+      await laboratory.save();
+    }
+  }
+
+  await logAuditEvent({
+    laboratoryId: user.laboratoryId,
+    actorId: user._id,
+    actorRole: user.role,
+    entityType: 'User',
+    entityId: user._id,
+    action: 'PROFILE_UPDATED',
+    req,
+  });
+
+  return {
+    id: user._id,
+    name: user.name,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+    laboratory: laboratory ? (laboratory.toObject ? laboratory.toObject() : laboratory) : null,
+  };
+};
+
 module.exports = {
   login,
   getMe,
+  updateProfile,
   forgetPassword,
   resetPassword,
   resetPasswordLoggedIn,

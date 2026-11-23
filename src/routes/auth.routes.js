@@ -7,6 +7,7 @@ const {
   loginSchema,
   forgetPasswordSchema,
   resetPasswordSchema,
+  updateProfileSchema,
 } = require('../validators/auth.validator');
 
 /**
@@ -115,5 +116,48 @@ router.post('/change-password', validateRequest(resetPasswordSchema), authContro
  *         description: Unauthorized
  */
 router.get('/me', authenticate, authController.getMe);
+
+/**
+ * @openapi
+ * /api/v1/auth/profile:
+ *   put:
+ *     summary: Update authenticated user profile
+ *     description: Update name, username, email, phone number, address, and authorised signatory. Requires valid token.
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string, example: 'Super Administrator' }
+ *               fullName: { type: string, example: 'Super Administrator' }
+ *               username: { type: string, example: 'admin' }
+ *               email: { type: string, example: 'admin@cellcited.com' }
+ *               phone: { type: string, example: '9554448906, 6307342505' }
+ *               phones: { type: array, items: { type: string } }
+ *               phoneNumber: { type: string }
+ *               address: { type: string, example: 'Shop No. 17, City Trade Centre' }
+ *               authorisedSignatory: { type: string, example: 'Dr. Sanjay Singh, MBBS, MD Pathologist' }
+ *     responses:
+ *       200:
+ *         description: User profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StandardSuccessResponse'
+ *       400:
+ *         description: Validation error or username already taken
+ *       401:
+ *         description: Unauthorized - token missing or invalid
+ */
+router.put('/profile', authenticate, validateRequest(updateProfileSchema), authController.updateProfile);
+router.patch('/profile', authenticate, validateRequest(updateProfileSchema), authController.updateProfile);
+router.put('/me', authenticate, validateRequest(updateProfileSchema), authController.updateProfile);
+router.patch('/me', authenticate, validateRequest(updateProfileSchema), authController.updateProfile);
 
 module.exports = router;
