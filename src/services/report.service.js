@@ -334,6 +334,133 @@ const updateResults = async (laboratoryId, reportId, items = [], actor = null, r
   return report;
 };
 
+const updateReport = async (laboratoryId, id, data, actor = null, req = null) => {
+  const query = mongoose.isValidObjectId(id)
+    ? { _id: id, laboratoryId }
+    : { reportNumber: String(id).trim().toUpperCase(), laboratoryId };
+
+  const report = await Report.findOne(query);
+  if (!report) {
+    throw ApiError.notFound('Report not found', ERROR_CODES.NOT_FOUND);
+  }
+
+  const beforeJson = report.toObject();
+
+  // 1. Status update
+  if (data.status !== undefined) {
+    report.status = data.status;
+    if (data.status === REPORT_STATUS.FINAL) {
+      report.finalisedAt = report.finalisedAt || new Date();
+      report.finalisedBy = actor?._id || report.finalisedBy;
+    }
+  }
+
+  // 2. Metadata fields
+  ['sampleType', 'registeredOn', 'collectedOn', 'reportedOn'].forEach((field) => {
+    if (data[field] !== undefined) {
+      report[field] = String(data[field]).trim();
+    }
+  });
+
+  // 3. Doctor reference update
+  if (data.doctorId !== undefined) {
+    if (data.doctorId && mongoose.isValidObjectId(data.doctorId)) {
+      const doctor = await Doctor.findOne({ _id: data.doctorId, laboratoryId, isActive: true });
+      if (doctor) {
+        report.doctorId = doctor._id;
+        report.doctorSnapshot = {
+          doctorCode: doctor.doctorCode || '',
+          name: doctor.name || 'Self',
+          specialty: doctor.specialty || '',
+          referralPercentage: doctor.referralPercentage || 0,
+        };
+      }
+    } else if (!data.doctorId || data.doctorId === 'Self') {
+      report.doctorId = null;
+      report.doctorSnapshot = { name: 'Self', referralPercentage: 0 };
+    }
+  }
+
+  // 4. Financial fields
+  if (data.fee !== undefined) {
+    report.fee = Math.max(0, Number(data.fee));
+    await Invoice.updateOne(
+      { reportId: report._id, laboratoryId },
+      {
+        $set: {
+          total: report.fee,
+          balance: Math.max(0, report.fee - (report.paid || 0)),
+        },
+      }
+    );
+  }
+
+  if (data.discount !== undefined) {
+    report.discount = Math.max(0, Number(data.discount));
+  }
+
+  if (data.paid !== undefined) {
+    report.paid = Math.max(0, Number(data.paid));
+    await Invoice.updateOne(
+      { reportId: report._id, laboratoryId },
+      {
+        $set: {
+          paid: report.paid,
+          balance: Math.max(0, (report.fee || 0) - report.paid),
+        },
+      }
+    );
+  }
+
+  // 5. Test results and items
+  const itemsToUpdate = data.items || data.tests;
+  if (Array.isArray(itemsToUpdate) && itemsToUpdate.length > 0) {
+    const itemMap = new Map();
+    for (const item of itemsToUpdate) {
+      if (item.reportItemId) itemMap.set(String(item.reportItemId), item);
+      if (item._id) itemMap.set(String(item._id), item);
+      if (item.testName) itemMap.set(item.testName.toLowerCase(), item);
+      if (item.name) itemMap.set(item.name.toLowerCase(), item);
+    }
+
+    for (const repItem of report.items) {
+      const updated =
+        itemMap.get(String(repItem._id)) ||
+        itemMap.get(repItem.testNameSnapshot?.toLowerCase());
+
+      if (updated) {
+        if (updated.value !== undefined) repItem.value = String(updated.value).trim();
+        if (updated.unit !== undefined) repItem.unitSnapshot = String(updated.unit).trim();
+        if (updated.range !== undefined) repItem.rangeSnapshot = String(updated.range).trim();
+        if (updated.referenceRange !== undefined) repItem.rangeSnapshot = String(updated.referenceRange).trim();
+        if (updated.remark !== undefined) repItem.remark = String(updated.remark).trim();
+
+        repItem.isOutOfRange = checkOutOfRange(
+          repItem.value,
+          repItem.rangeSnapshot,
+          repItem.alertableSnapshot
+        );
+      }
+    }
+  }
+
+  await report.save();
+
+  await logAuditEvent({
+    laboratoryId,
+    actorId: actor?._id,
+    actorRole: actor?.role,
+    entityType: 'Report',
+    entityId: report._id,
+    action: 'UPDATE',
+    beforeJson,
+    afterJson: report.toObject(),
+    req,
+  });
+
+  return report;
+};
+
 const finalizeReport = async (laboratoryId, reportId, data = {}, actor = null, req = null) => {
   const report = await Report.findOne({ _id: reportId, laboratoryId });
   if (!report) {
@@ -513,4 +640,5 @@ module.exports = {
   finalizeReport,
   reopenReport,
   requestDocument,
+  updateReport,
 };

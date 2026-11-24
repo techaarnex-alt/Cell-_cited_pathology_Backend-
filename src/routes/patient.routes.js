@@ -135,7 +135,15 @@ router.get('/:id', authenticate, patientController.getPatientById);
 router.patch(
   '/:id',
   authenticate,
-  authorize(ROLES.ADMINISTRATOR, ROLES.RECEPTIONIST),
+  authorize(ROLES.ADMINISTRATOR, ROLES.RECEPTIONIST, ROLES.TECHNICIAN),
+  validateRequest(updatePatientSchema),
+  patientController.updatePatient
+);
+
+router.put(
+  '/:id',
+  authenticate,
+  authorize(ROLES.ADMINISTRATOR, ROLES.RECEPTIONIST, ROLES.TECHNICIAN),
   validateRequest(updatePatientSchema),
   patientController.updatePatient
 );

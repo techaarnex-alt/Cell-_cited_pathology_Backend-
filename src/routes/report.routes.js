@@ -11,6 +11,7 @@ const {
   reopenReportSchema,
   documentRequestSchema,
   queryReportSchema,
+  updateReportSchema,
 } = require('../validators/report.validator');
 
 /**
@@ -91,6 +92,22 @@ router.post(
  *         description: Report details retrieved
  */
 router.get('/:id', authenticate, reportController.getReportById);
+
+router.patch(
+  '/:id',
+  authenticate,
+  authorize(ROLES.ADMINISTRATOR, ROLES.TECHNICIAN, ROLES.PATHOLOGIST, ROLES.RECEPTIONIST),
+  validateRequest(updateReportSchema),
+  reportController.updateReport
+);
+
+router.put(
+  '/:id',
+  authenticate,
+  authorize(ROLES.ADMINISTRATOR, ROLES.TECHNICIAN, ROLES.PATHOLOGIST, ROLES.RECEPTIONIST),
+  validateRequest(updateReportSchema),
+  reportController.updateReport
+);
 
 /**
  * @openapi

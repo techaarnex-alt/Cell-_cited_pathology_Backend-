@@ -63,6 +63,17 @@ const requestDocument = catchAsync(async (req, res) => {
   return sendSuccess(res, 201, 'Document generated successfully', document);
 });
 
+const updateReport = catchAsync(async (req, res) => {
+  const report = await reportService.updateReport(
+    req.laboratoryId,
+    req.params.id,
+    req.body,
+    req.user,
+    req
+  );
+  return sendSuccess(res, 200, 'Report updated successfully', report);
+});
+
 module.exports = {
   getReports,
   getReportById,
@@ -71,4 +82,5 @@ module.exports = {
   finalizeReport,
   reopenReport,
   requestDocument,
+  updateReport,
 };

@@ -59,6 +59,21 @@ const queryReportSchema = Joi.object({
   reportNumber: Joi.string().trim(),
 });
 
+const updateReportSchema = Joi.object({
+  status: Joi.string().valid(...Object.values(REPORT_STATUS)),
+  sampleType: Joi.string().trim().allow(''),
+  registeredOn: Joi.string().trim().allow(''),
+  collectedOn: Joi.string().trim().allow(''),
+  reportedOn: Joi.string().trim().allow(''),
+  fee: Joi.number().min(0),
+  discount: Joi.number().min(0),
+  paid: Joi.number().min(0),
+  doctorId: Joi.string().trim().allow(null, ''),
+  items: Joi.array().items(resultItemSchema),
+  tests: Joi.array().items(resultItemSchema),
+  expectedVersion: Joi.number().integer(),
+}).min(1);
+
 module.exports = {
   createReportSchema,
   updateResultsSchema,
@@ -66,4 +81,5 @@ module.exports = {
   reopenReportSchema,
   documentRequestSchema,
   queryReportSchema,
+  updateReportSchema,
 };

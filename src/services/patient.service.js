@@ -284,31 +284,55 @@ const createPatient = async (laboratoryId, data, actor = null, req = null) => {
 };
 
 const updatePatient = async (laboratoryId, id, data, actor = null, req = null) => {
-  const patient = await Patient.findOne({ _id: id, laboratoryId, isActive: true });
+  const query = mongoose.isValidObjectId(id)
+    ? { _id: id, laboratoryId, isActive: true }
+    : { patientNumber: String(id).trim().toUpperCase(), laboratoryId, isActive: true };
+
+  const patient = await Patient.findOne(query);
   if (!patient) {
     throw ApiError.notFound('Patient not found', ERROR_CODES.NOT_FOUND);
   }
 
   const beforeJson = patient.toObject();
 
-  if (data.doctorId) {
-    const doctor = await Doctor.findOne({ _id: data.doctorId, laboratoryId, isActive: true });
-    if (doctor) {
-      patient.doctorId = doctor._id;
-      patient.doctorNameSnapshot = doctor.name;
+  if (data.doctorId !== undefined) {
+    if (data.doctorId && mongoose.isValidObjectId(data.doctorId)) {
+      const doctor = await Doctor.findOne({ _id: data.doctorId, laboratoryId, isActive: true });
+      if (doctor) {
+        patient.doctorId = doctor._id;
+        patient.doctorNameSnapshot = doctor.name;
+      }
+    } else if (!data.doctorId || data.doctorId === 'Self') {
+      patient.doctorId = null;
+      patient.doctorNameSnapshot = 'Self';
     }
-  } else if (data.doctorId === null || data.doctorId === '') {
-    patient.doctorId = null;
-    patient.doctorNameSnapshot = 'Self';
   }
 
-  ['title', 'name', 'age', 'ageUnit', 'gender', 'mobile', 'address'].forEach((field) => {
+  ['title', 'name', 'age', 'ageUnit', 'gender', 'mobile', 'address', 'sampleType', 'registeredOn'].forEach((field) => {
     if (data[field] !== undefined) {
       patient[field] = data[field];
     }
   });
 
   await patient.save();
+  await patient.populate('doctorId', 'doctorCode name specialty referralPercentage');
+
+  // Keep patient snapshots on reports in sync
+  await Report.updateMany(
+    { laboratoryId, patientId: patient._id },
+    {
+      $set: {
+        'patientSnapshot.name': patient.name,
+        'patientSnapshot.title': patient.title,
+        'patientSnapshot.age': patient.age,
+        'patientSnapshot.ageUnit': patient.ageUnit,
+        'patientSnapshot.gender': patient.gender,
+        'patientSnapshot.mobile': patient.mobile,
+        'patientSnapshot.address': patient.address,
+        'patientSnapshot.sampleType': patient.sampleType,
+      },
+    }
+  );
 
   await logAuditEvent({
     laboratoryId,
