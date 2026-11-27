@@ -58,18 +58,18 @@ if (env.NODE_ENV !== 'test') {
 }
 
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 15 minutes
-  max: env.NODE_ENV === 'test' ? 1000 : 300, // limit each IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again after 15 minutes',
-    error: { code: 'RATE_LIMIT_EXCEEDED' },
-  },
-});
-app.use('/api/', limiter);
+// const limiter = rateLimit({
+//   windowMs: 10 * 60 * 1000, // 15 minutes
+//   max: env.NODE_ENV === 'test' ? 1000 : 300, // limit each IP
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: {
+//     success: false,
+//     message: 'Too many requests from this IP, please try again after 15 minutes',
+//     error: { code: 'RATE_LIMIT_EXCEEDED' },
+//   },
+// });
+// app.use('/api/', limiter);
 
 // Swagger Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

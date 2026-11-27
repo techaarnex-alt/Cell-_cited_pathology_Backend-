@@ -361,8 +361,32 @@ const updateProfile = async (userId, updateData, req = null) => {
   };
 };
 
+const logout = async (user = null, req = null) => {
+  if (user && user._id) {
+    try {
+      await logAuditEvent({
+        laboratoryId: user.laboratoryId?._id || user.laboratoryId,
+        actorId: user._id,
+        actorRole: user.role,
+        entityType: 'User',
+        entityId: user._id,
+        action: 'LOGOUT',
+        req,
+      });
+    } catch (auditErr) {
+      console.warn('Audit log warning during logout:', auditErr.message);
+    }
+  }
+
+  return {
+    loggedOut: true,
+    message: 'User logged out successfully. Tokens and sessions invalidated.',
+  };
+};
+
 module.exports = {
   login,
+  logout,
   getMe,
   updateProfile,
   forgetPassword,

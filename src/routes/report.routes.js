@@ -12,6 +12,7 @@ const {
   documentRequestSchema,
   queryReportSchema,
   updateReportSchema,
+  reorderReportItemsSchema,
 } = require('../validators/report.validator');
 
 /**
@@ -107,6 +108,14 @@ router.put(
   authorize(ROLES.ADMINISTRATOR, ROLES.TECHNICIAN, ROLES.PATHOLOGIST, ROLES.RECEPTIONIST),
   validateRequest(updateReportSchema),
   reportController.updateReport
+);
+
+router.put(
+  '/:id/reorder',
+  authenticate,
+  authorize(ROLES.ADMINISTRATOR, ROLES.TECHNICIAN, ROLES.PATHOLOGIST, ROLES.RECEPTIONIST),
+  validateRequest(reorderReportItemsSchema),
+  reportController.reorderReportItems
 );
 
 /**

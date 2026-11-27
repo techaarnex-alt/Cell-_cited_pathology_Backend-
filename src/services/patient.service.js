@@ -8,6 +8,7 @@ const Invoice = require('../models/Invoice');
 const ApiError = require('../utils/ApiError');
 const ERROR_CODES = require('../constants/errorCodes');
 const { logAuditEvent } = require('./audit.service');
+const { sortTestsByCatalogueOrder } = require('../utils/catalogueOrder');
 
 const generatePatientNumber = async (laboratoryId, session = null) => {
   const count = await Patient.countDocuments({ laboratoryId }).session(session);
@@ -118,6 +119,10 @@ const createPatient = async (laboratoryId, data, actor = null, req = null) => {
           ageUnit: data.ageUnit || 'Years',
           gender: data.gender,
           mobile: data.mobile ? data.mobile.trim() : '',
+          email: data.email ? data.email.trim().toLowerCase() : '',
+          aadhaar: data.aadhaar ? data.aadhaar.trim() : '',
+          patientHistory: data.patientHistory ? data.patientHistory.trim() : '',
+          onlineReportRequested: Boolean(data.onlineReportRequested),
           address: data.address ? data.address.trim() : '',
           doctorId: doctor ? doctor._id : null,
           doctorNameSnapshot,
@@ -159,12 +164,22 @@ const createPatient = async (laboratoryId, data, actor = null, req = null) => {
         isActive: true,
       }).session(session);
 
+      const allGroups = await TestGroup.find({
+        $or: [
+          { laboratoryId },
+          { laboratoryId: null },
+          { laboratoryId: { $exists: false } },
+        ],
+      }).sort({ order: 1, name: 1 }).session(session).lean();
+
+      const sortedCatalogueTests = sortTestsByCatalogueOrder(catalogueTests, allGroups);
+
       // Deduplicate selected tests
       const seenTestNames = new Set();
       const reportItems = [];
       let totalFee = 0;
 
-      for (const t of catalogueTests) {
+      for (const t of sortedCatalogueTests) {
         if (!seenTestNames.has(t.name.toLowerCase())) {
           seenTestNames.add(t.name.toLowerCase());
           reportItems.push({
@@ -204,6 +219,10 @@ const createPatient = async (laboratoryId, data, actor = null, req = null) => {
                 ageUnit: patient.ageUnit,
                 gender: patient.gender,
                 mobile: patient.mobile,
+                email: patient.email,
+                aadhaar: patient.aadhaar,
+                patientHistory: patient.patientHistory,
+                onlineReportRequested: patient.onlineReportRequested,
                 address: patient.address,
                 sampleType,
                 registeredOn,
@@ -223,6 +242,7 @@ const createPatient = async (laboratoryId, data, actor = null, req = null) => {
               fee: finalFee,
               paid: 0,
               testGroupNames: groupNames,
+              hasCustomItemOrder: false,
               items: reportItems,
             },
           ],
@@ -308,7 +328,7 @@ const updatePatient = async (laboratoryId, id, data, actor = null, req = null) =
     }
   }
 
-  ['title', 'name', 'age', 'ageUnit', 'gender', 'mobile', 'address', 'sampleType', 'registeredOn'].forEach((field) => {
+  ['title', 'name', 'age', 'ageUnit', 'gender', 'mobile', 'email', 'aadhaar', 'patientHistory', 'onlineReportRequested', 'address', 'sampleType', 'registeredOn'].forEach((field) => {
     if (data[field] !== undefined) {
       patient[field] = data[field];
     }

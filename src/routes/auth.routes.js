@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/auth.controller');
-const { authenticate } = require('../middlewares/auth');
+const { authenticate, optionalAuth } = require('../middlewares/auth');
 const validateRequest = require('../middlewares/validate');
 const {
   loginSchema,
@@ -39,6 +39,26 @@ const {
  *               $ref: '#/components/schemas/StandardErrorResponse'
  */
 router.post('/login', validateRequest(loginSchema), authController.login);
+
+/**
+ * @openapi
+ * /api/v1/auth/logout:
+ *   post:
+ *     summary: User logout
+ *     description: Invalidate active user session and log audit event.
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StandardSuccessResponse'
+ */
+router.post('/logout', optionalAuth, authController.logout);
 
 /**
  * @openapi

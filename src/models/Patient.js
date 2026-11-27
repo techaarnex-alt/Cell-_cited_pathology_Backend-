@@ -45,6 +45,26 @@ const patientSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: '',
+    },
+    aadhaar: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    patientHistory: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    onlineReportRequested: {
+      type: Boolean,
+      default: false,
+    },
     address: {
       type: String,
       trim: true,

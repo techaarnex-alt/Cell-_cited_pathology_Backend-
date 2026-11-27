@@ -46,8 +46,14 @@ const resetPassword = catchAsync(async (req, res) => {
   return sendSuccess(res, 200, 'Password has been reset successfully. You can now login with your new password.', result);
 });
 
+const logout = catchAsync(async (req, res) => {
+  const result = await authService.logout(req.user, req);
+  return sendSuccess(res, 200, 'Logged out successfully', result);
+});
+
 module.exports = {
   login,
+  logout,
   getMe,
   updateProfile,
   forgetPassword,

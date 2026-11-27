@@ -58,7 +58,26 @@ const authorize = (...allowedRoles) => {
   };
 };
 
+const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, env.JWT_SECRET);
+      const user = await User.findById(decoded.id);
+      if (user && user.isActive) {
+        req.user = user;
+        req.laboratoryId = user.laboratoryId;
+      }
+    }
+  } catch (_) {
+    // Proceed without throwing for optional auth (e.g., logout with expired token)
+  }
+  next();
+};
+
 module.exports = {
   authenticate,
   authorize,
+  optionalAuth,
 };

@@ -11,6 +11,10 @@ const patientSnapshotSchema = new mongoose.Schema(
     ageUnit: { type: String, default: 'Years' },
     gender: { type: String, required: true },
     mobile: { type: String, default: '' },
+    email: { type: String, default: '' },
+    aadhaar: { type: String, default: '' },
+    patientHistory: { type: String, default: '' },
+    onlineReportRequested: { type: Boolean, default: false },
     address: { type: String, default: '' },
     sampleType: { type: String, default: 'Blood' },
     registeredOn: { type: String, default: '' },
@@ -93,6 +97,15 @@ const reportSchema = new mongoose.Schema(
       default: [],
     },
     items: [reportItemSchema],
+    hasCustomItemOrder: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    customOrderSavedAt: {
+      type: Date,
+      default: null,
+    },
     sampleType: {
       type: String,
       trim: true,

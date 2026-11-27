@@ -74,6 +74,17 @@ const updateReportSchema = Joi.object({
   expectedVersion: Joi.number().integer(),
 }).min(1);
 
+const reorderReportItemsSchema = Joi.object({
+  orderedItemIds: Joi.array()
+    .items(Joi.string().trim().required())
+    .min(1)
+    .required()
+    .messages({
+      'any.required': 'orderedItemIds array is required',
+      'array.min': 'At least one item ID is required',
+    }),
+});
+
 module.exports = {
   createReportSchema,
   updateResultsSchema,
@@ -82,4 +93,5 @@ module.exports = {
   documentRequestSchema,
   queryReportSchema,
   updateReportSchema,
+  reorderReportItemsSchema,
 };

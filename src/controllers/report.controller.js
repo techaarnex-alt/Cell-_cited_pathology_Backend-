@@ -74,6 +74,17 @@ const updateReport = catchAsync(async (req, res) => {
   return sendSuccess(res, 200, 'Report updated successfully', report);
 });
 
+const reorderReportItems = catchAsync(async (req, res) => {
+  const report = await reportService.reorderReportItems(
+    req.laboratoryId,
+    req.params.id,
+    req.body.orderedItemIds,
+    req.user,
+    req
+  );
+  return sendSuccess(res, 200, 'Report items reordered successfully', report);
+});
+
 module.exports = {
   getReports,
   getReportById,
@@ -83,4 +94,5 @@ module.exports = {
   reopenReport,
   requestDocument,
   updateReport,
+  reorderReportItems,
 };

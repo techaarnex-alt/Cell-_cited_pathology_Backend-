@@ -12,6 +12,7 @@ const { REPORT_STATUS, DOCUMENT_TYPES } = require('../constants/status');
 const { ROLES } = require('../constants/roles');
 const { checkOutOfRange } = require('../utils/referenceRange');
 const { logAuditEvent } = require('./audit.service');
+const { sortTestsByCatalogueOrder } = require('../utils/catalogueOrder');
 
 const generateReportNumber = async (laboratoryId, session = null) => {
   const count = await Report.countDocuments({ laboratoryId }).session(session);
@@ -60,6 +61,24 @@ const getReports = async (laboratoryId, query = {}) => {
     Report.countDocuments(filter),
   ]);
 
+  const groups = await TestGroup.find({
+    $or: [
+      { laboratoryId },
+      { laboratoryId: null },
+      { laboratoryId: { $exists: false } },
+    ],
+  }).sort({ order: 1, name: 1 }).lean();
+
+  reports.forEach((report) => {
+    if (report && Array.isArray(report.items)) {
+      if (report.hasCustomItemOrder) {
+        report.items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      } else if (report.status !== REPORT_STATUS.FINAL) {
+        report.items = sortTestsByCatalogueOrder(report.items, groups);
+      }
+    }
+  });
+
   return {
     reports,
     pagination: {
@@ -79,6 +98,22 @@ const getReportById = async (laboratoryId, id) => {
 
   if (!report) {
     throw ApiError.notFound('Report not found', ERROR_CODES.NOT_FOUND);
+  }
+
+  const groups = await TestGroup.find({
+    $or: [
+      { laboratoryId },
+      { laboratoryId: null },
+      { laboratoryId: { $exists: false } },
+    ],
+  }).sort({ order: 1, name: 1 }).lean();
+
+  if (Array.isArray(report.items)) {
+    if (report.hasCustomItemOrder) {
+      report.items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    } else if (report.status !== REPORT_STATUS.FINAL) {
+      report.items = sortTestsByCatalogueOrder(report.items, groups);
+    }
   }
 
   const invoice = await Invoice.findOne({ reportId: report._id, laboratoryId }).lean();
@@ -149,12 +184,22 @@ const createReport = async (laboratoryId, data, actor = null, req = null) => {
       throw ApiError.badRequest('None of the requested investigations were found in the test catalogue');
     }
 
+    const allGroups = await TestGroup.find({
+      $or: [
+        { laboratoryId },
+        { laboratoryId: null },
+        { laboratoryId: { $exists: false } },
+      ],
+    }).sort({ order: 1, name: 1 }).session(session).lean();
+
+    const sortedCatalogueTests = sortTestsByCatalogueOrder(catalogueTests, allGroups);
+
     // Deduplicate and snapshot
     const seenNames = new Set();
     const reportItems = [];
     let calculatedFee = 0;
 
-    for (const test of catalogueTests) {
+    for (const test of sortedCatalogueTests) {
       const key = test.name.toLowerCase();
       if (!seenNames.has(key)) {
         seenNames.add(key);
@@ -217,6 +262,7 @@ const createReport = async (laboratoryId, data, actor = null, req = null) => {
           fee: totalFee,
           paid: 0,
           testGroupNames: groupNames,
+          hasCustomItemOrder: false,
           items: reportItems,
         },
       ],
@@ -632,6 +678,82 @@ const requestDocument = async (laboratoryId, reportId, options = {}, actor = nul
   return document;
 };
 
+const reorderReportItems = async (laboratoryId, reportId, orderedItemIds = [], actor = null, req = null) => {
+  const query = mongoose.isValidObjectId(reportId)
+    ? { _id: reportId, laboratoryId }
+    : { reportNumber: String(reportId).trim().toUpperCase(), laboratoryId };
+
+  const report = await Report.findOne(query);
+  if (!report) {
+    throw ApiError.notFound('Report not found', ERROR_CODES.NOT_FOUND);
+  }
+
+  if (report.status === REPORT_STATUS.FINAL) {
+    throw new ApiError(
+      409,
+      'Finalised reports are immutable and cannot be reordered. Reopen the report first with an authorized reason.',
+      ERROR_CODES.REPORT_IMMUTABLE
+    );
+  }
+
+  if (!Array.isArray(orderedItemIds) || orderedItemIds.length === 0) {
+    throw ApiError.badRequest('orderedItemIds must be a non-empty array of report item IDs');
+  }
+
+  // Validate duplicate IDs
+  const idSet = new Set(orderedItemIds.map(String));
+  if (idSet.size !== orderedItemIds.length) {
+    throw ApiError.badRequest('Duplicate report item IDs provided');
+  }
+
+  const currentItemMap = new Map();
+  (report.items || []).forEach((item) => {
+    currentItemMap.set(String(item._id), item);
+  });
+
+  // Validate that all supplied IDs belong to this report
+  for (const id of orderedItemIds) {
+    if (!currentItemMap.has(String(id))) {
+      throw ApiError.badRequest(`Report item ID ${id} does not belong to this report`);
+    }
+  }
+
+  // Validate that all items belonging to this report are accounted for
+  if (orderedItemIds.length !== report.items.length) {
+    throw ApiError.badRequest(`All ${report.items.length} report item IDs must be provided`);
+  }
+
+  const beforeJson = report.toObject();
+
+  // Reorder items and assign consecutive displayOrder
+  const reordered = [];
+  orderedItemIds.forEach((id, index) => {
+    const item = currentItemMap.get(String(id));
+    item.displayOrder = index;
+    reordered.push(item);
+  });
+
+  report.items = reordered;
+  report.hasCustomItemOrder = true;
+  report.customOrderSavedAt = new Date();
+
+  await report.save();
+
+  await logAuditEvent({
+    laboratoryId,
+    actorId: actor?._id,
+    actorRole: actor?.role,
+    entityType: 'Report',
+    entityId: report._id,
+    action: 'REPORT_ITEMS_REORDERED',
+    beforeJson,
+    afterJson: report.toObject(),
+    req,
+  });
+
+  return report;
+};
+
 module.exports = {
   getReports,
   getReportById,
@@ -641,4 +763,5 @@ module.exports = {
   reopenReport,
   requestDocument,
   updateReport,
+  reorderReportItems,
 };
