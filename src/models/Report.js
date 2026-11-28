@@ -97,6 +97,19 @@ const reportSchema = new mongoose.Schema(
       default: [],
     },
     items: [reportItemSchema],
+    bookedServices: [
+      {
+        serviceId: { type: String },
+        categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'TestGroup', default: null },
+        categoryName: { type: String, default: 'General' },
+        bookableTestId: { type: String, required: true },
+        name: { type: String, required: true },
+        testType: { type: String, default: 'single_parameter' },
+        rateSnapshot: { type: Number, required: true, min: 0 },
+        parameterCount: { type: Number, default: 1 },
+        parameterDefIds: [{ type: String }],
+      },
+    ],
     hasCustomItemOrder: {
       type: Boolean,
       default: false,

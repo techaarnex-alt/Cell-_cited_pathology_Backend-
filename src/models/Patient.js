@@ -90,6 +90,11 @@ const patientSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    collectedOn: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     isActive: {
       type: Boolean,
       default: true,

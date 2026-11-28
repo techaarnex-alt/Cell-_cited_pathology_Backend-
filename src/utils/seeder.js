@@ -13,6 +13,9 @@ const DEFAULT_DOCTORS = [
   { doctorCode: 'DR-003', name: 'Dr. RUMAN', specialty: 'Consultant Pathologist', referralPercentage: 70, mobile: '8601463398', address: 'Barabanki' },
 ];
 
+const CURATED_TESTS = [];
+const CURATED_GROUPS = [];
+
 const seedInitialData = async () => {
   try {
     let lab = await Laboratory.findOne({ code: 'CCPL' });

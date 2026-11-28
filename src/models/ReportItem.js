@@ -63,6 +63,44 @@ const reportItemSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    bookedServiceId: {
+      type: String,
+      default: '',
+    },
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TestGroup',
+      default: null,
+    },
+    bookableTestId: {
+      type: String,
+      default: '',
+    },
+    parameterDefId: {
+      type: String,
+      default: '',
+    },
+    masterParamRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Test',
+      default: null,
+    },
+    parentPanelName: {
+      type: String,
+      default: '',
+    },
+    testType: {
+      type: String,
+      default: 'single_parameter',
+    },
+    inputType: {
+      type: String,
+      default: 'numeric',
+    },
+    optional: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

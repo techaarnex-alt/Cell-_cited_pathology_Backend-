@@ -12,6 +12,7 @@ const createReportSchema = Joi.object({
   reportedOn: Joi.string().trim().allow('').default(''),
   testGroupIds: Joi.array().items(Joi.string().trim()).default([]),
   testIds: Joi.array().items(Joi.string().trim()).default([]),
+  bookableTestIds: Joi.array().items(Joi.string().trim()).default([]),
   tests: Joi.array().items(Joi.string().trim()).default([]),
   testGroups: Joi.array().items(Joi.string().trim()).default([]),
   feeOverride: Joi.number().min(0).allow(null),
@@ -19,6 +20,8 @@ const createReportSchema = Joi.object({
 
 const resultItemSchema = Joi.object({
   reportItemId: Joi.string().trim().allow(null, ''),
+  bookedServiceId: Joi.string().trim().allow(null, ''),
+  parameterDefId: Joi.string().trim().allow(null, ''),
   testName: Joi.string().trim(),
   value: Joi.string().trim().allow('').default(''),
   unit: Joi.string().trim().allow(''),

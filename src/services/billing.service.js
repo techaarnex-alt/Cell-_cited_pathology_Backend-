@@ -63,6 +63,22 @@ const createInvoice = async (laboratoryId, data, actor = null, req = null) => {
   const discount = data.discount != null ? Number(data.discount) : Number(report.discount || 0);
   const netTotal = Math.max(0, total - discount);
 
+  const lineItems = Array.isArray(report.bookedServices) && report.bookedServices.length > 0
+    ? report.bookedServices.map((s) => ({
+        serviceId: s.serviceId,
+        bookableTestId: s.bookableTestId,
+        testName: s.name,
+        testType: s.testType,
+        rate: s.rateSnapshot,
+      }))
+    : (report.items || []).map((item) => ({
+        serviceId: item.bookedServiceId || '',
+        bookableTestId: item.bookableTestId || '',
+        testName: item.testNameSnapshot,
+        testType: item.testType || 'single_parameter',
+        rate: item.rateSnapshot,
+      }));
+
   const invoice = await Invoice.create({
     laboratoryId,
     invoiceNumber,
@@ -73,10 +89,7 @@ const createInvoice = async (laboratoryId, data, actor = null, req = null) => {
     paid: 0,
     balance: netTotal,
     status: INVOICE_STATUS.PENDING,
-    itemSnapshots: (report.items || []).map((item) => ({
-      testName: item.testNameSnapshot,
-      rate: item.rateSnapshot,
-    })),
+    itemSnapshots: lineItems,
   });
 
   await logAuditEvent({

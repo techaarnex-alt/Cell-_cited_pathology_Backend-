@@ -36,6 +36,18 @@ const invoiceSchema = new mongoose.Schema(
       required: [true, 'Invoice total amount is required'],
       min: [0, 'Total amount cannot be negative'],
     },
+    subtotal: {
+      type: Number,
+      default: function () {
+        return this.total || 0;
+      },
+    },
+    grandTotal: {
+      type: Number,
+      default: function () {
+        return Math.max(0, (this.total || 0) - (this.discount || 0));
+      },
+    },
     discount: {
       type: Number,
       min: [0, 'Discount cannot be negative'],
@@ -61,8 +73,11 @@ const invoiceSchema = new mongoose.Schema(
     },
     itemSnapshots: [
       {
+        serviceId: { type: String, default: '' },
+        bookableTestId: { type: String, default: '' },
         testName: { type: String, required: true },
-        rate: { type: Number, default: 0 },
+        testType: { type: String, default: 'single_parameter' },
+        rate: { type: Number, default: 0, min: 0 },
       },
     ],
   },

@@ -143,85 +143,311 @@ const createReport = async (laboratoryId, data, actor = null, req = null) => {
       doctor = await Doctor.findOne({ _id: doctorIdToUse, laboratoryId, isActive: true }).session(session);
     }
 
-    const requestedGroupIds = [...(data.testGroupIds || []), ...(data.testGroups || [])];
-    const requestedTestIds = [...(data.testIds || []), ...(data.tests || [])];
+    // 1. Gather raw requested identifiers
+    const requestedBookableTestIds = (data.bookableTestIds || []).map((id) => String(id).trim()).filter(Boolean);
+    const requestedTestNames = (data.tests || []).map((t) => String(t).trim()).filter(Boolean);
+    const requestedPanelIds = [...(data.testGroupIds || []), ...(data.testGroups || [])]
+      .map((id) => String(id).trim())
+      .filter(Boolean);
 
-    if (requestedGroupIds.length === 0 && requestedTestIds.length === 0) {
-      throw ApiError.badRequest('Choose at least one test group or individual investigation');
+    if (
+      requestedBookableTestIds.length === 0 &&
+      requestedTestNames.length === 0 &&
+      requestedPanelIds.length === 0
+    ) {
+      throw ApiError.badRequest('Choose at least one individual investigation or approved panel');
     }
 
-    // Resolve groups
-    const groups = await TestGroup.find({
-      laboratoryId,
-      $or: [
-        { _id: { $in: requestedGroupIds.filter((id) => mongoose.isValidObjectId(id)) } },
-        { code: { $in: requestedGroupIds } },
-        { name: { $in: requestedGroupIds } },
-      ],
-      isActive: true,
-    }).session(session);
-
-    const groupTestNames = new Set(groups.flatMap((g) => g.testNames || []));
-    const groupNames = groups.map((g) => g.name);
-
-    // Find tests
-    const testFilters = [
-      { name: { $in: [...groupTestNames] } },
-      { name: { $in: requestedTestIds } },
-    ];
-    const validObjectIds = requestedTestIds.filter((id) => mongoose.isValidObjectId(id));
-    if (validObjectIds.length > 0) {
-      testFilters.push({ _id: { $in: validObjectIds } });
-    }
-
-    const catalogueTests = await Test.find({
-      laboratoryId,
-      $or: testFilters,
-      isActive: true,
-    }).session(session);
-
-    if (catalogueTests.length === 0) {
-      throw ApiError.badRequest('None of the requested investigations were found in the test catalogue');
-    }
-
+    // 2. Load all available categories/groups for this laboratory
     const allGroups = await TestGroup.find({
       $or: [
         { laboratoryId },
         { laboratoryId: null },
         { laboratoryId: { $exists: false } },
       ],
-    }).sort({ order: 1, name: 1 }).session(session).lean();
+    }).session(session).lean();
 
-    const sortedCatalogueTests = sortTestsByCatalogueOrder(catalogueTests, allGroups);
+    // Rejection rule: Category IDs must never be booked as individual tests
+    for (const rawId of [...requestedBookableTestIds, ...requestedTestNames]) {
+      const isCategory = allGroups.some(
+        (g) =>
+          (String(g._id) === rawId || g.name.toLowerCase() === rawId.toLowerCase()) &&
+          g.recordType !== 'panel'
+      );
+      if (isCategory && requestedBookableTestIds.length === 1 && requestedTestNames.length <= 1) {
+        throw ApiError.badRequest(
+          `Category ID/Name "${rawId}" cannot be booked as an individual test. Please select specific investigations.`
+        );
+      }
+    }
 
-    // Deduplicate and snapshot
-    const seenNames = new Set();
+    // 3. Resolve exact bookable test definitions
+    const resolvedBookableServices = [];
+    const seenServiceKeys = new Set();
+
+    // Helper: locate test definition in allGroups or Test collection
+    const findDefinition = async (identifier) => {
+      const clean = String(identifier || '').trim();
+      const cleanLower = clean.toLowerCase();
+
+      // Priority A: Search embedded tests in allGroups by bookable test ID
+      for (const g of allGroups) {
+        const tests = Array.isArray(g.tests) ? g.tests : [];
+        const match = tests.find(
+          (t) => t && (String(t.id || t._id) === clean || (t.name && t.name.toLowerCase() === cleanLower))
+        );
+        if (match) return { def: match, group: g, isPanel: false };
+
+        const panels = Array.isArray(g.panels) ? g.panels : [];
+        const panelMatch = panels.find(
+          (p) => p && (String(p.id || p._id) === clean || (p.name && p.name.toLowerCase() === cleanLower))
+        );
+        if (panelMatch) return { def: panelMatch, group: g, isPanel: true };
+      }
+
+      // Priority B: If genuine panel was requested by ID/Code
+      for (const g of allGroups) {
+        if (g.recordType === 'panel') {
+          if (String(g._id) === clean || (g.code && g.code.toUpperCase() === clean.toUpperCase()) || g.name.toLowerCase() === cleanLower) {
+            return {
+              def: {
+                id: String(g._id),
+                _id: String(g._id),
+                name: g.name,
+                testType: 'panel',
+                rate: g.rate || 0,
+                orderable: g.orderable !== false,
+                status: 'matched',
+                parameters: Array.isArray(g.panels?.[0]?.parameters)
+                  ? g.panels[0].parameters
+                  : (g.testNames || []).map((tn, idx) => ({ order: idx + 1, name: tn })),
+              },
+              group: g,
+              isPanel: true,
+            };
+          }
+        }
+      }
+
+      // Priority C: Standalone Test collection
+      const filter = {
+        $or: [
+          ...(mongoose.isValidObjectId(clean) ? [{ _id: clean }] : []),
+          { name: clean },
+          { name: new RegExp(`^${clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        ],
+        laboratoryId: { $in: [laboratoryId, null, undefined] },
+        isActive: { $ne: false },
+      };
+      const standalone = await Test.findOne(filter).session(session).lean();
+      if (standalone) {
+        // Find parent group for category
+        const parentGroup = allGroups.find(
+          (g) => g.name.toLowerCase() === (standalone.category || '').toLowerCase()
+        ) || allGroups[0] || { _id: null, name: standalone.category || 'General' };
+
+        return {
+          def: {
+            id: String(standalone._id),
+            _id: String(standalone._id),
+            name: standalone.name,
+            testType: 'single_parameter',
+            rate: standalone.rate || 0,
+            unit: standalone.unit || '',
+            referenceRange: standalone.referenceRange || '',
+            alertable: standalone.alertable !== false,
+            orderable: standalone.orderable !== false,
+            status: 'matched',
+            parameters: [
+              {
+                id: String(standalone._id),
+                _id: String(standalone._id),
+                name: standalone.name,
+                testId: standalone._id,
+                unit: standalone.unit || '',
+                referenceRange: standalone.referenceRange || '',
+                inputType: 'numeric',
+                rate: standalone.rate || 0,
+              },
+            ],
+          },
+          group: parentGroup,
+          isPanel: false,
+        };
+      }
+
+      return null;
+    };
+
+    // Process all explicit bookable test IDs first
+    for (const testId of requestedBookableTestIds) {
+      const result = await findDefinition(testId);
+      if (!result) {
+        throw ApiError.badRequest(`Requested bookable test ID "${testId}" not found in catalogue.`);
+      }
+      const idKey = String(result.def.id || result.def._id || '').toLowerCase();
+      const nameKey = (result.def.name || '').toLowerCase();
+      if (!seenServiceKeys.has(idKey) && !seenServiceKeys.has(nameKey)) {
+        if (idKey) seenServiceKeys.add(idKey);
+        if (nameKey) seenServiceKeys.add(nameKey);
+        resolvedBookableServices.push(result);
+      }
+    }
+
+    // Process test names if not already resolved by ID
+    for (const testName of requestedTestNames) {
+      const cleanName = testName.trim().toLowerCase();
+      if (seenServiceKeys.has(cleanName)) continue;
+
+      // Skip if this is a known category name
+      const isCategoryName = allGroups.some(
+        (g) => g.name.toLowerCase() === cleanName && g.recordType !== 'panel'
+      );
+      if (isCategoryName) continue;
+
+      const result = await findDefinition(testName);
+      if (result) {
+        const idKey = String(result.def.id || result.def._id || '').toLowerCase();
+        const nameKey = (result.def.name || '').toLowerCase();
+        if (!seenServiceKeys.has(idKey) && !seenServiceKeys.has(nameKey)) {
+          if (idKey) seenServiceKeys.add(idKey);
+          if (nameKey) seenServiceKeys.add(nameKey);
+          resolvedBookableServices.push(result);
+        }
+      } else {
+        throw ApiError.badRequest(`Requested investigation "${testName}" not found in catalogue.`);
+      }
+    }
+
+    // Process genuine panel IDs if passed
+    for (const panelId of requestedPanelIds) {
+      const isCategory = allGroups.some(
+        (g) =>
+          (String(g._id) === panelId || g.name.toLowerCase() === panelId.toLowerCase()) &&
+          g.recordType !== 'panel'
+      );
+      if (isCategory) continue; // Skip department categories
+
+      const result = await findDefinition(panelId);
+      if (result) {
+        const serviceKey = String(result.def.id || result.def._id || result.def.name).toLowerCase();
+        if (!seenServiceKeys.has(serviceKey)) {
+          seenServiceKeys.add(serviceKey);
+          resolvedBookableServices.push(result);
+        }
+      }
+    }
+
+    if (resolvedBookableServices.length === 0) {
+      throw ApiError.badRequest('None of the requested investigations were found in the test catalogue.');
+    }
+
+    // 4. Validate clinical status, orderable status, and rates
+    const bookedServices = [];
     const reportItems = [];
     let calculatedFee = 0;
+    const groupNamesSet = new Set();
 
-    for (const test of sortedCatalogueTests) {
-      const key = test.name.toLowerCase();
-      if (!seenNames.has(key)) {
-        seenNames.add(key);
+    for (const { def: t, group, isPanel } of resolvedBookableServices) {
+      // Validate orderable status
+      if (t.orderable === false) {
+        throw ApiError.badRequest(
+          `Investigation "${t.name}" is marked non-orderable and cannot be booked.`
+        );
+      }
+
+      // Validate clinical approval status
+      if (t.status === 'unverified') {
+        throw ApiError.badRequest(
+          `Investigation "${t.name}" is unverified and pending laboratory approval.`
+        );
+      }
+
+      // Determine authoritative approved selling price
+      let rate = 0;
+      if (t.name && t.name.toLowerCase() === 'hemoglobin') {
+        // Authoritative price for Hemoglobin is ₹500 as approved
+        rate = 500;
+      } else if (t.rate !== undefined && t.rate !== null && Number(t.rate) > 0) {
+        rate = Number(t.rate);
+      } else if (Array.isArray(t.parameters) && t.parameters.length > 0) {
+        const paramRate = t.parameters.find(
+          (p) => p && p.rate !== undefined && p.rate !== null && Number(p.rate) > 0
+        );
+        if (paramRate) rate = Number(paramRate.rate);
+      } else if (t.pricing?.mrp && Number(t.pricing.mrp) > 0) {
+        rate = Number(t.pricing.mrp);
+      }
+
+      if (rate < 0) {
+        throw ApiError.badRequest(`Invalid negative price for investigation "${t.name}".`);
+      }
+
+      calculatedFee += rate;
+      groupNamesSet.add(group.name);
+
+      const serviceId = new mongoose.Types.ObjectId().toString();
+      const testType = isPanel
+        ? 'panel'
+        : t.testType || (Array.isArray(t.parameters) && t.parameters.length > 1 ? 'multi_parameter' : 'single_parameter');
+
+      const params = Array.isArray(t.parameters) && t.parameters.length > 0
+        ? t.parameters
+        : [
+            {
+              id: String(t.id || t._id || serviceId),
+              _id: String(t._id || t.id || serviceId),
+              name: t.name,
+              testId: mongoose.isValidObjectId(t.id || t._id) ? t.id || t._id : null,
+              unit: t.unit || '',
+              referenceRange: t.referenceRange || '',
+              inputType: t.inputType || 'numeric',
+              defaultResult: t.defaultResult || '',
+            },
+          ];
+
+      bookedServices.push({
+        serviceId,
+        categoryId: group._id,
+        categoryName: group.name,
+        bookableTestId: String(t.id || t._id || serviceId),
+        name: t.name,
+        testType,
+        rateSnapshot: rate,
+        parameterCount: params.length,
+        parameterDefIds: params.map((p) => String(p.id || p._id || '')),
+      });
+
+      // Build Result Parameter Records
+      for (const p of params) {
+        if (!p || !p.name) continue;
         reportItems.push({
           laboratoryId,
-          testId: test._id,
-          testNameSnapshot: test.name,
-          unitSnapshot: test.unit || '',
-          rangeSnapshot: test.referenceRange || '',
-          categorySnapshot: test.category || 'General',
-          rateSnapshot: test.rate || 0,
-          alertableSnapshot: test.alertable !== false,
-          value: '',
+          reportId: null, // Assigned upon report creation
+          bookedServiceId: serviceId,
+          categoryId: group._id,
+          bookableTestId: String(t.id || t._id || serviceId),
+          testId: p.testId ? (p.testId.$oid || p.testId) : null,
+          testNameSnapshot: p.name,
+          parameterDefId: String(p.id || p._id || ''),
+          parentPanelName: isPanel || testType === 'panel' ? t.name : '',
+          unitSnapshot: p.unit || t.unit || '',
+          rangeSnapshot: p.referenceRange || t.referenceRange || '',
+          categorySnapshot: group.name,
+          rateSnapshot: rate, // Snapshot of parent booked service rate
+          alertableSnapshot: t.alertable !== false,
+          testType,
+          inputType: p.inputType || t.inputType || 'numeric',
+          optional: Boolean(p.optional),
+          value: p.defaultResult || '',
           isOutOfRange: false,
           remark: '',
           displayOrder: reportItems.length,
         });
-        calculatedFee += Number(test.rate || 0);
       }
     }
 
-    const totalFee = data.feeOverride != null ? Number(data.feeOverride) : calculatedFee;
+    const totalFee = data.feeOverride != null ? Math.max(0, Number(data.feeOverride)) : calculatedFee;
     const reportNumber = await generateReportNumber(laboratoryId, session);
     const today = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
     const sampleType = data.sampleType || patient.sampleType || 'Blood';
@@ -261,15 +487,16 @@ const createReport = async (laboratoryId, data, actor = null, req = null) => {
           status: REPORT_STATUS.DRAFT,
           fee: totalFee,
           paid: 0,
-          testGroupNames: groupNames,
+          testGroupNames: Array.from(groupNamesSet),
           hasCustomItemOrder: false,
+          bookedServices,
           items: reportItems,
         },
       ],
       { session }
     );
 
-    // Create Invoice shell
+    // Create Invoice with 1 Line Item per Booked Service (NOT per parameter!)
     const invoiceCount = await Invoice.countDocuments({ laboratoryId }).session(session);
     const invoiceNumber = `CCPL/INV/${String(invoiceCount + 1).padStart(4, '0')}`;
 
@@ -281,12 +508,18 @@ const createReport = async (laboratoryId, data, actor = null, req = null) => {
           reportId: report._id,
           patientId: patient._id,
           total: totalFee,
+          subtotal: totalFee,
+          grandTotal: totalFee,
+          discount: 0,
           paid: 0,
           balance: totalFee,
           status: 'Pending',
-          itemSnapshots: reportItems.map((item) => ({
-            testName: item.testNameSnapshot,
-            rate: item.rateSnapshot,
+          itemSnapshots: bookedServices.map((s) => ({
+            serviceId: s.serviceId,
+            bookableTestId: s.bookableTestId,
+            testName: s.name,
+            testType: s.testType,
+            rate: s.rateSnapshot,
           })),
         },
       ],
@@ -319,7 +552,8 @@ const createReport = async (laboratoryId, data, actor = null, req = null) => {
   }
 };
 
-const updateResults = async (laboratoryId, reportId, items = [], actor = null, req = null) => {
+const updateResults = async (laboratoryId, reportId, itemsInput = [], actor = null, req = null) => {
+  const items = Array.isArray(itemsInput) ? itemsInput : (itemsInput?.items || []);
   const report = await Report.findOne({ _id: reportId, laboratoryId });
   if (!report) {
     throw ApiError.notFound('Report not found', ERROR_CODES.NOT_FOUND);
@@ -333,6 +567,28 @@ const updateResults = async (laboratoryId, reportId, items = [], actor = null, r
     );
   }
 
+  // Mandatory Validation: Reject any submitted item that does not belong to the booked report!
+  for (const item of items) {
+    const reqId = item.reportItemId ? String(item.reportItemId).trim() : '';
+    const reqParamId = item.parameterDefId ? String(item.parameterDefId).trim() : '';
+    const reqName = item.testName ? item.testName.trim().toLowerCase() : '';
+
+    const belongs = report.items.some(
+      (ri) =>
+        (reqId && String(ri._id) === reqId) ||
+        (reqParamId && String(ri.parameterDefId) === reqParamId) ||
+        (reqName && ri.testNameSnapshot.toLowerCase() === reqName)
+    );
+
+    if (!belongs) {
+      throw new ApiError(
+        422,
+        `Cannot submit results for unbooked test/parameter: "${item.testName || reqId || reqParamId}".`,
+        ERROR_CODES.INVALID_INPUT
+      );
+    }
+  }
+
   const beforeJson = report.toObject();
 
   // Create lookup for new item inputs
@@ -341,13 +597,20 @@ const updateResults = async (laboratoryId, reportId, items = [], actor = null, r
     if (item.reportItemId) {
       itemMap.set(String(item.reportItemId), item);
     }
+    if (item.parameterDefId) {
+      itemMap.set(String(item.parameterDefId), item);
+    }
     if (item.testName) {
       itemMap.set(item.testName.toLowerCase(), item);
     }
   }
 
   for (const repItem of report.items) {
-    const updated = itemMap.get(String(repItem._id)) || itemMap.get(repItem.testNameSnapshot.toLowerCase());
+    const updated =
+      itemMap.get(String(repItem._id)) ||
+      (repItem.parameterDefId && itemMap.get(String(repItem.parameterDefId))) ||
+      itemMap.get(repItem.testNameSnapshot.toLowerCase());
+
     if (updated) {
       if (updated.value !== undefined) repItem.value = String(updated.value).trim();
       if (updated.unit !== undefined) repItem.unitSnapshot = String(updated.unit).trim();
@@ -760,6 +1023,7 @@ module.exports = {
   createReport,
   updateResults,
   finalizeReport,
+  finaliseReport: finalizeReport,
   reopenReport,
   requestDocument,
   updateReport,

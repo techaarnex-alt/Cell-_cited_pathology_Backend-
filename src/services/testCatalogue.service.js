@@ -489,10 +489,23 @@ const updateTest = async (laboratoryId, testId, updateData, user = null, req = n
       categoryId: String(targetGroup._id),
     };
   } else {
-    sourceGroup.tests[testIndex] = updatedTest;
-    await sourceGroup.save();
+    // If modifying a global catalogue template from a laboratory session, clone for the lab to prevent cross-lab mutation
+    let groupToSave = sourceGroup;
+    if (!sourceGroup.laboratoryId && laboratoryId) {
+      const cloned = new TestGroup({
+        ...sourceGroup.toObject(),
+        _id: new mongoose.Types.ObjectId(),
+        laboratoryId,
+      });
+      cloned.tests[testIndex] = updatedTest;
+      await cloned.save();
+      groupToSave = cloned;
+    } else {
+      sourceGroup.tests[testIndex] = updatedTest;
+      await sourceGroup.save();
+    }
 
-    const targetLabId = laboratoryId || sourceGroup.laboratoryId;
+    const targetLabId = laboratoryId || groupToSave.laboratoryId;
     if (targetLabId) {
       await logAuditEvent({
         laboratoryId: targetLabId,

@@ -128,6 +128,7 @@ const createPatient = async (laboratoryId, data, actor = null, req = null) => {
           doctorNameSnapshot,
           sampleType,
           registeredOn,
+          collectedOn,
         },
       ],
       { session }
@@ -328,7 +329,7 @@ const updatePatient = async (laboratoryId, id, data, actor = null, req = null) =
     }
   }
 
-  ['title', 'name', 'age', 'ageUnit', 'gender', 'mobile', 'email', 'aadhaar', 'patientHistory', 'onlineReportRequested', 'address', 'sampleType', 'registeredOn'].forEach((field) => {
+  ['title', 'name', 'age', 'ageUnit', 'gender', 'mobile', 'email', 'aadhaar', 'patientHistory', 'onlineReportRequested', 'address', 'sampleType', 'registeredOn', 'collectedOn'].forEach((field) => {
     if (data[field] !== undefined) {
       patient[field] = data[field];
     }
